@@ -27,6 +27,17 @@ STATUS_FINISHED = 'finished'
 STATUS_FAILED = 'failed'
 
 
+def get_big_pockets(ligands_dict, threshold):
+    
+    big_pocket_smiles = []
+    for ligand in ligands:
+        if ligands[ligand]['atoms'] >= threshold:
+            for protein_smile in ligands[ligand]['pockets']:
+                big_pocket_smiles.append(protein_smile)
+    
+    return set(big_pocket_smiles)
+
+
 def get_init_samples(data, model, batch_size=1, num_points=8000, refine_using_grid=True, default_max_retry=5):
     batch = Batch.from_data_list([data] * batch_size, follow_batch=FOLLOW_BATCH)
     with torch.no_grad():
@@ -168,8 +179,34 @@ if __name__ == '__main__':
         config = config.dataset,
         transform = transform,
     )
-    testset = subsets['test']
-    data = testset[args.data_id]
+    
+#     summary = torch.load('summary_stats.pt')
+#     ligands = summary['ligands']
+#     badpockets = get_big_pockets(ligands, 60)
+    
+#     print(subsets.keys())
+    subset = subsets['train']
+    data = subset[args.data_id]
+    
+#     indices = []
+#     print( f'length: {len(subset)}' )
+#     for i in range(len(subset)):
+#         data = subset[i]
+#         filename = data.protein_filename
+#         print(f"File: {filename}")
+#         try: 
+#             smiles = Chem.MolToSmiles( Chem.MolFromPDBFile(f"/data/rsg/nlp/xiangfu/sbdd_data/crossdocked_pocket10/{filename}", sanitize=False, removeHs=False) )                        
+#             if smiles in badpockets:
+#                 indices.append(i)
+                
+#         except:
+#             print("Bad chemical")
+            
+#     print("DONE!")
+                                                    
+#     with open('indices.txt', 'w') as f:
+#         for index in indices:
+#             f.write(f"{str(index)}\n")
 
     with open(os.path.join(log_dir, 'pocket_info.txt'), 'a') as f:
         f.write(data.protein_filename + '\n')
@@ -298,9 +335,20 @@ if __name__ == '__main__':
 
     sdf_dir = os.path.join(log_dir, 'SDF')
     os.makedirs(sdf_dir)
+    bad_samples = []
     with open(os.path.join(log_dir, 'SMILES.txt'), 'a') as smiles_f:
         for i, data_finished in enumerate(pool['finished']):
-            smiles_f.write(data_finished.smiles + '\n')
-            writer = Chem.SDWriter(os.path.join(sdf_dir, '%d.sdf' % i))
-            writer.write(data_finished.rdmol, confId=0)
-            writer.close()
+            try: 
+                smiles_f.write(data_finished.smiles + '\n')
+                writer = Chem.SDWriter(os.path.join(sdf_dir, '%d.sdf' % i))
+                writer.write(data_finished.rdmol, confId=0)
+                writer.close()
+                
+            except:
+                bad_samples.append(i)
+                
+    if bad_samples != []:            
+        with open(f'bad_samples_{args.data_id}.txt', 'w') as bad_samples_f:
+            for sample in bad_samples:
+                bad_samples_f.write(sample)
+            
